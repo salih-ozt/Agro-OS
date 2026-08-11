@@ -1,0 +1,675 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AgroOS Installer</title>
+<style>
+  :root{
+    --accent: #34c759;
+    --accent-2: #30d158;
+    --danger: #ff453a;
+    --text-primary: rgba(255,255,255,0.95);
+    --text-secondary: rgba(255,255,255,0.6);
+    --text-tertiary: rgba(255,255,255,0.38);
+    --glass-bg: rgba(30,30,32,0.55);
+    --glass-border: rgba(255,255,255,0.14);
+    --glass-highlight: rgba(255,255,255,0.08);
+  }
+
+  *{ margin:0; padding:0; box-sizing:border-box; -webkit-font-smoothing:antialiased; }
+
+  html,body{
+    width:100%; height:100%;
+    font-family:-apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, sans-serif;
+    overflow:hidden;
+    user-select:none;
+  }
+
+  /* ---------- Background ---------- */
+  .bg{
+    position:fixed; inset:0;
+    background-image:url("assets/background.jpg");
+    background-size:cover;
+    background-position:center;
+    filter: blur(38px) brightness(0.55) saturate(1.15);
+    transform: scale(1.15);
+    z-index:0;
+  }
+  .bg-overlay{
+    position:fixed; inset:0;
+    background: radial-gradient(ellipse at 50% 0%, rgba(0,0,0,0.05), rgba(0,0,0,0.55) 75%);
+    z-index:1;
+  }
+  .bg-noise{
+    position:fixed; inset:0;
+    z-index:2;
+    opacity:0.035;
+    pointer-events:none;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+  /* ---------- Top menu bar (macOS vibe) ---------- */
+  .menubar{
+    position:fixed; top:0; left:0; right:0; height:28px;
+    z-index:20;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:0 16px;
+    background:rgba(20,20,22,0.35);
+    backdrop-filter: blur(20px) saturate(1.8);
+    -webkit-backdrop-filter: blur(20px) saturate(1.8);
+    border-bottom:1px solid rgba(255,255,255,0.08);
+    font-size:12.5px;
+    color:var(--text-secondary);
+  }
+  .menubar-left{ display:flex; align-items:center; gap:16px; font-weight:600; color:var(--text-primary); }
+  .menubar-right{ display:flex; align-items:center; gap:14px; font-variant-numeric:tabular-nums; }
+  .wifi-indicator{ display:flex; align-items:center; gap:6px; font-size:11.5px; }
+  .wifi-indicator::before{ content:''; width:7px; height:7px; border-radius:50%; background:var(--text-tertiary); }
+  .wifi-indicator.online::before{ background:var(--accent); box-shadow:0 0 6px rgba(52,199,89,0.7); }
+  .wifi-indicator.offline::before{ background:var(--danger); box-shadow:0 0 6px rgba(255,69,58,0.6); }
+  .wifi-indicator.checking::before{ background:#febc2e; box-shadow:0 0 6px rgba(254,188,46,0.6); }
+
+  .prep-wrap{ display:flex; flex-direction:column; align-items:center; justify-content:center; flex:1; text-align:center; padding:20px 0; }
+  .prep-ring{ width:56px; height:56px; margin-bottom:22px; }
+  .prep-ring svg{ width:56px; height:56px; animation: prep-spin 1.4s linear infinite; }
+  .prep-ring circle{ fill:none; stroke-width:4; stroke-linecap:round; stroke:var(--accent); stroke-dasharray:120; stroke-dashoffset:90; }
+  @keyframes prep-spin{ to{ transform:rotate(360deg); } }
+  .prep-title{ font-size:18px; font-weight:700; color:var(--text-primary); margin-bottom:8px; }
+  .prep-sub{ font-size:12.5px; color:var(--text-tertiary); }
+  .disk-warning{
+    display:flex; gap:10px; align-items:flex-start;
+    margin-top:14px; padding:12px 14px;
+    background:rgba(255,69,58,0.1); border:1px solid rgba(255,69,58,0.3); border-radius:10px;
+    font-size:12px; color:rgba(255,255,255,0.75); line-height:1.5;
+  }
+  .disk-warning svg{ width:16px; height:16px; fill:var(--danger); flex-shrink:0; margin-top:1px; }
+  .install-log{
+    margin-top:16px; font-family:"SF Mono", Menlo, Consolas, monospace;
+    font-size:11px; line-height:1.7; color:var(--text-tertiary);
+    max-height:110px; overflow-y:auto;
+    background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.06);
+    border-radius:8px; padding:10px 12px;
+  }
+  .install-log .line{ white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .install-log .line::before{ content:'✓ '; color:var(--accent); }
+  .agroos-logo{ display:flex; align-items:center; gap:6px; }
+  .agroos-logo .dot{ width:8px; height:8px; border-radius:50%; background:var(--accent); box-shadow:0 0 8px var(--accent);}
+
+  /* ---------- Center stage ---------- */
+  .stage{
+    position:relative; z-index:10;
+    width:100%; height:100%;
+    display:flex; align-items:center; justify-content:center;
+    padding-top:28px;
+  }
+
+  /* ---------- Glass card ---------- */
+  .card{
+    width:560px;
+    max-width:92vw;
+    min-height:460px;
+    border-radius:20px;
+    background:var(--glass-bg);
+    backdrop-filter: blur(40px) saturate(1.6);
+    -webkit-backdrop-filter: blur(40px) saturate(1.6);
+    border:1px solid var(--glass-border);
+    box-shadow:
+      0 20px 60px rgba(0,0,0,0.5),
+      0 2px 8px rgba(0,0,0,0.3),
+      inset 0 1px 0 rgba(255,255,255,0.12),
+      inset 0 0 0 1px rgba(255,255,255,0.02);
+    display:flex; flex-direction:column;
+    overflow:hidden;
+    animation: cardIn 0.6s cubic-bezier(0.16,1,0.3,1);
+  }
+  @keyframes cardIn{
+    from{ opacity:0; transform:translateY(24px) scale(0.97); }
+    to{ opacity:1; transform:translateY(0) scale(1); }
+  }
+
+  /* window traffic lights */
+  .card-titlebar{
+    height:44px;
+    display:flex; align-items:center;
+    padding:0 16px;
+    gap:8px;
+    border-bottom:1px solid rgba(255,255,255,0.06);
+    background:rgba(255,255,255,0.02);
+  }
+  .traffic{ width:12px; height:12px; border-radius:50%; }
+  .traffic.red{ background:#ff5f57; }
+  .traffic.yellow{ background:#febc2e; }
+  .traffic.green{ background:#28c840; }
+  .card-titlebar .title{
+    flex:1; text-align:center;
+    font-size:12.5px; font-weight:600;
+    color:var(--text-secondary);
+    margin-right:52px;
+  }
+
+  /* ---------- Step progress ---------- */
+  .steps{
+    display:flex; align-items:center; justify-content:center;
+    gap:6px;
+    padding:22px 24px 6px;
+  }
+  .step-pill{
+    height:4px; width:38px; border-radius:2px;
+    background:rgba(255,255,255,0.14);
+    transition: background 0.4s ease, box-shadow 0.4s ease;
+  }
+  .step-pill.done{ background:var(--accent); box-shadow:0 0 6px rgba(52,199,89,0.6); }
+  .step-pill.active{ background:linear-gradient(90deg, var(--accent), var(--accent-2)); box-shadow:0 0 10px rgba(52,199,89,0.7); }
+
+  /* ---------- Content area ---------- */
+  .content{
+    flex:1;
+    display:flex; flex-direction:column;
+    padding:28px 32px 20px;
+  }
+  .step-icon svg,.disk-icon svg{width:30px;height:30px;fill:currentColor}.step-icon{
+    width:64px; height:64px;
+    border-radius:16px;
+    background:linear-gradient(145deg, rgba(52,199,89,0.25), rgba(48,209,88,0.08));
+    border:1px solid rgba(52,199,89,0.3);
+    display:flex; align-items:center; justify-content:center;
+    font-size:30px;
+    margin-bottom:18px;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.15), 0 8px 24px rgba(52,199,89,0.15);
+  }
+  .step-title{
+    font-size:22px; font-weight:700;
+    color:var(--text-primary);
+    letter-spacing:-0.3px;
+    margin-bottom:6px;
+  }
+  .step-desc{
+    font-size:14px; line-height:1.5;
+    color:var(--text-secondary);
+    margin-bottom:22px;
+  }
+
+  /* ---------- Disk list (step 2 example) ---------- */
+  .disk-list{ display:flex; flex-direction:column; gap:10px; margin-bottom:8px; }
+  .disk-item{
+    display:flex; align-items:center; gap:12px;
+    padding:14px 16px;
+    border-radius:12px;
+    background:rgba(255,255,255,0.04);
+    border:1px solid rgba(255,255,255,0.08);
+    cursor:pointer;
+    transition: all 0.2s ease;
+  }
+  .disk-item:hover{ background:rgba(255,255,255,0.07); border-color:rgba(255,255,255,0.16); }
+  .disk-item.selected{
+    background:rgba(52,199,89,0.12);
+    border-color:rgba(52,199,89,0.5);
+    box-shadow:0 0 0 3px rgba(52,199,89,0.12);
+  }
+  .disk-icon{
+    width:38px; height:38px; border-radius:9px;
+    background:rgba(255,255,255,0.06);
+    display:flex; align-items:center; justify-content:center;
+    font-size:18px;
+    flex-shrink:0;
+  }
+  .disk-info{ flex:1; min-width:0; }
+  .disk-name{ font-size:13.5px; font-weight:600; color:var(--text-primary); }
+  .disk-meta{ font-size:11.5px; color:var(--text-tertiary); margin-top:2px; }
+  .disk-radio{
+    width:18px; height:18px; border-radius:50%;
+    border:1.5px solid rgba(255,255,255,0.3);
+    flex-shrink:0;
+    position:relative;
+    transition: all 0.2s ease;
+  }
+  .disk-item.selected .disk-radio{
+    border-color:var(--accent);
+    background:var(--accent);
+  }
+  .disk-item.selected .disk-radio::after{
+    content:'';
+    position:absolute; inset:4px;
+    border-radius:50%;
+    background:#0b0b0c;
+  }
+
+  /* ---------- Progress bar (install step) ---------- */
+  .progress-wrap{ margin-top:6px; }
+  .progress-track{
+    height:8px; border-radius:4px;
+    background:rgba(255,255,255,0.08);
+    overflow:hidden;
+    margin-bottom:10px;
+  }
+  .progress-fill{
+    height:100%; border-radius:4px;
+    background:linear-gradient(90deg, var(--accent), var(--accent-2));
+    width:38%;
+    box-shadow:0 0 12px rgba(52,199,89,0.6);
+    transition:width 0.4s ease;
+  }
+  .progress-label{
+    display:flex; justify-content:space-between;
+    font-size:12px; color:var(--text-tertiary);
+  }
+
+  /* ---------- Footer / nav buttons ---------- */
+  .card-footer{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:16px 32px 24px;
+    border-top:1px solid rgba(255,255,255,0.06);
+    margin-top:auto;
+  }
+  .btn{
+    appearance:none; border:none; outline:none;
+    font-family:inherit;
+    font-size:14px; font-weight:600;
+    padding:10px 22px;
+    border-radius:10px;
+    cursor:pointer;
+    transition: all 0.15s ease;
+    letter-spacing:-0.1px;
+  }
+  .btn-ghost{
+    background:rgba(255,255,255,0.06);
+    color:var(--text-secondary);
+    border:1px solid rgba(255,255,255,0.1);
+  }
+  .btn-ghost:hover{ background:rgba(255,255,255,0.1); color:var(--text-primary); }
+  .btn-ghost:active{ transform:scale(0.97); }
+  .btn-ghost:disabled{ opacity:0.3; cursor:default; }
+
+  .btn-primary{
+    background:linear-gradient(145deg, var(--accent-2), var(--accent));
+    color:#06210e;
+    box-shadow:0 4px 16px rgba(52,199,89,0.35), inset 0 1px 0 rgba(255,255,255,0.3);
+  }
+  .btn-primary:hover{ filter:brightness(1.08); transform:translateY(-1px); box-shadow:0 6px 20px rgba(52,199,89,0.45), inset 0 1px 0 rgba(255,255,255,0.3); }
+  .btn-primary:active{ transform:translateY(0) scale(0.97); }
+
+  .step-counter{
+    font-size:12px; color:var(--text-tertiary);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ---------- Bottom dock hint ---------- */
+  .footer-hint{
+    position:fixed; bottom:18px; left:50%; transform:translateX(-50%);
+    font-size:11.5px; color:var(--text-tertiary);
+    z-index:10;
+    letter-spacing:0.2px;
+  }
+
+.wifi-status{
+  display:flex;
+  align-items:center;
+  gap:7px;
+  padding:7px 11px;
+  border:1px solid rgba(0,0,0,.08);
+  border-radius:999px;
+  background:rgba(255,255,255,.72);
+  color:#667085;
+  font-size:12px;
+  font-weight:600;
+  white-space:nowrap;
+}
+.wifi-icon{width:17px;height:17px;display:flex;align-items:center;justify-content:center}
+.wifi-icon svg{width:17px;height:17px;fill:currentColor}
+.wifi-status.online{color:#157347}
+.wifi-status.offline{color:#b42318}
+.wifi-status.checking{color:#667085}
+
+</style>
+</head>
+<body>
+
+  <div class="bg"></div>
+  <div class="bg-overlay"></div>
+  <div class="bg-noise"></div>
+
+  <div class="menubar">
+    <div class="menubar-left">
+      <div class="agroos-logo"><span class="dot"></span> AgroOS</div>
+    </div>
+    <div class="menubar-right">
+      <span id="wifiStatus" class="wifi-indicator checking"><span id="wifiText">Ağ kontrol ediliyor…</span></span>
+      <span id="clock">--:--</span>
+    </div>
+  </div>
+
+  <div class="stage">
+    <div class="card" id="card">
+      <div class="card-titlebar">
+        <span class="traffic red"></span>
+        <span class="traffic yellow"></span>
+        <span class="traffic green"></span>
+        <span class="title" id="titlebarText">AgroOS Hazırlanıyor</span>
+      </div>
+
+      <div class="steps" id="stepPills" style="display:none;"></div>
+
+      <div class="content" id="stepContent">
+        <div class="prep-wrap">
+          <div class="prep-ring"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/></svg></div>
+          <div class="prep-title">Kurulum hazırlanıyor</div>
+          <div class="prep-sub">Donanım taranıyor, lütfen bekleyin…</div>
+        </div>
+      </div>
+
+      <div class="card-footer" id="cardFooter" style="display:none;">
+        <button class="btn btn-ghost" id="btnBack">Geri</button>
+        <span class="step-counter" id="stepCounter">1 / 5</span>
+        <button class="btn btn-primary" id="btnNext">İleri</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer-hint">AgroOS Installer &middot; v0.1</div>
+
+<script>
+  // ---------- Saat ----------
+  function tick(){
+    const d = new Date();
+    document.getElementById('clock').textContent =
+      d.toLocaleTimeString('tr-TR', {hour:'2-digit', minute:'2-digit'});
+  }
+  tick(); setInterval(tick, 1000);
+
+  // ---------- Adım tanımları ----------
+  const steps = [
+    {
+      key: 'welcome',
+      icon: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a2 2 0 0 1 2 2v6.5l1.2-1.2a1.8 1.8 0 0 1 2.5 2.5l-4.1 4.1a4 4 0 0 1-2.8 1.1H9.5A4.5 4.5 0 0 1 5 13.5V9a2 2 0 0 1 4 0v2.5h1V5a2 2 0 0 1 2-2Z"/></svg>',
+      title: 'Hoş Geldiniz',
+      desc: 'AgroOS kurulum sihirbazına hoş geldiniz. Devam etmeden önce birkaç kolay adımı tamamlayacağız.',
+      render: () => `<p style="font-size:13px;color:var(--text-secondary);line-height:1.6;">Bu sihirbaz sırasıyla disk seçimi, bölümleme, dosya sistemi kurulumu ve önyükleyici (bootloader) kurulumunu yapacak. Herhangi bir adımda geri dönebilirsiniz.</p>`
+    },
+    {
+      key: 'disk',
+      icon: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h13l3 3v13H4V4Zm3 0v6h8V4H7Zm1 12v4h8v-4H8Z"/></svg>',
+      title: 'Disk Seçimi',
+      desc: 'AgroOS\'un kurulacağı diski seçin. Seçilen diskteki tüm veriler silinecektir.',
+      render: () => `
+        <div class="disk-list" id="diskList">
+          <div class="disk-item" style="cursor:default">
+            <div class="disk-icon">${diskSvg}</div>
+            <div class="disk-info">
+              <div class="disk-name">${lastDisks === null ? 'Diskler algılanıyor…' : 'Kurulabilir disk bulunamadı'}</div>
+              <div class="disk-meta">Gerçek disk bilgileri sistemden okunuyor.</div>
+            </div>
+          </div>
+        </div>
+        <div class="disk-warning">${warningSvg}<span>Seçilen diskteki tüm veriler kalıcı olarak silinecektir.</span></div>` },
+    {
+      key: 'partition',
+      icon: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h3v3h3V3h3v6h3v3h-3v3h3v6h-6v-3h-3v3H6v-6h3v-3H6V9h3V3Z"/></svg>',
+      title: 'Bölümleme',
+      desc: 'Disk otomatik olarak bölümlenecek: EFI, kök (/) ve takas (swap) alanı oluşturulacak.',
+      render: () => `<p style="font-size:13px;color:var(--text-secondary);line-height:1.6;">EFI: 512 MB &middot; Kök: kalan alan &middot; Swap: 2 GB<br><br>Bu işlem seçilen diski geri döndürülemez şekilde biçimlendirecektir.</p>`
+    },
+    {
+      key: 'install',
+      icon: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9.7 3 .7 2a7.8 7.8 0 0 1 3.2 0l.7-2 2.1.9-.8 2a8 8 0 0 1 2.3 2.3l2-.8.9 2.1-2 .7a7.8 7.8 0 0 1 0 3.2l2 .7-.9 2.1-2-.8a8 8 0 0 1-2.3 2.3l.8 2-2.1.9-.7-2a7.8 7.8 0 0 1-3.2 0l-.7 2-2.1-.9.8-2a8 8 0 0 1-2.3-2.3l-2 .8-.9-2.1 2-.7a7.8 7.8 0 0 1 0-3.2l-2-.7.9-2.1 2 .8a8 8 0 0 1 2.3-2.3l-.8-2L9.7 3ZM12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z"/></svg>',
+      title: 'Kuruluyor',
+      desc: 'Dosyalar kopyalanıyor ve sistem yapılandırılıyor. Bu birkaç dakika sürebilir.',
+      render: () => `
+        <div class="progress-wrap">
+          <div class="progress-track"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+          <div class="progress-label"><span id="progressText">Başlatılıyor…</span><span id="progressPct">0%</span></div>
+        </div>
+        <div class="install-log" id="installLog"></div>`
+    },
+    {
+      key: 'done',
+      icon: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm-1.2 14.4-4-4 1.8-1.8 2.2 2.2 4.8-4.8 1.8 1.8-6.6 6.6Z"/></svg>',
+      title: 'Tamamlandı',
+      desc: 'AgroOS başarıyla kuruldu. Bilgisayarınızı yeniden başlatabilirsiniz.',
+      render: () => `<p style="font-size:13px;color:var(--text-secondary);line-height:1.6;">USB/kurulum ortamını çıkarmayı unutmayın.</p>`
+    }
+  ];
+
+  let current = 0;
+
+  function renderPills(){
+    const wrap = document.getElementById('stepPills');
+    wrap.innerHTML = steps.map((s,i)=>{
+      const cls = i < current ? 'done' : (i === current ? 'active' : '');
+      return `<div class="step-pill ${cls}"></div>`;
+    }).join('');
+  }
+
+  function renderStep(){
+    const s = steps[current];
+    document.getElementById('stepContent').innerHTML = `
+      <div class="step-icon">${s.icon}</div>
+      <div class="step-title">${s.title}</div>
+      <div class="step-desc">${s.desc}</div>
+      ${s.render()}
+    `;
+    document.getElementById('stepCounter').textContent = `${current+1} / ${steps.length}`;
+    document.getElementById('btnBack').disabled = (current === 0) || (s.key === 'install') || (s.key === 'done');
+    document.getElementById('btnNext').textContent =
+      current === steps.length - 1 ? 'Yeniden Başlat' : (s.key === 'install' ? 'Kuruluyor…' : (s.key === 'partition' ? 'Biçimlendir ve Kur' : 'İleri'));
+    document.getElementById('btnNext').disabled = (s.key === 'install') || (s.key === 'disk' && !selectedDisk);
+
+    renderPills();
+    bindStepEvents();
+  }
+
+
+  const diskSvg = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3h11A2.5 2.5 0 0 1 20 5.5v3A2.5 2.5 0 0 1 17.5 11h-11A2.5 2.5 0 0 1 4 8.5v-3Zm0 10A2.5 2.5 0 0 1 6.5 13h11a2.5 2.5 0 0 1 2.5 2.5v3a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 18.5v-3Z"/></svg>';
+  const warningSvg = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 1 21h22L12 2Zm0 6.5 6.8 11.5H5.2L12 8.5ZM11 10v5h2v-5h-2Zm0 6.5v2h2v-2h-2Z"/></svg>';
+  let selectedDisk = null;
+  let lastDisks = null;   // null = henuz taranmadi, [] = tarandi ama disk yok
+  const installLog = [];
+
+  function esc(v){
+    return String(v ?? '').replaceAll('&','&amp;').replaceAll('<','&lt;')
+      .replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'","&#039;");
+  }
+
+  function diskSize(v){
+    let n = Number(v);
+    if (!Number.isFinite(n) || n <= 0) return 'Boyut bilinmiyor';
+    const u=['B','KB','MB','GB','TB']; let i=0;
+    while(n>=1024 && i<u.length-1){n/=1024;i++;}
+    return n.toFixed(n>=10 || i===0 ? 0 : 1)+' '+u[i];
+  }
+
+  function realRequest(payload, ok, fail){
+    if(typeof window.cefQuery !== 'function'){
+      fail?.(-1, 'CEF message router hazır değil.');
+      return;
+    }
+    window.cefQuery({
+      request: JSON.stringify(payload),
+      onSuccess: ok,
+      onFailure: fail || function(){}
+    });
+  }
+
+  // Disk listesini render eder — liste C++ tarafindan push edilir
+  // (ui_ready -> window.AgroOS.onReady(disks)), ayri bir "get_disks"
+  // istegi YOK; agroos-webui.cc bu sekilde calisiyor.
+  function renderDiskList(){
+    const list = document.getElementById('diskList');
+    if (!list) return;  // disk adiminda degilsek render etme
+
+    if (lastDisks === null) {
+      list.innerHTML = `<div class="disk-item" style="cursor:default">
+        <div class="disk-icon">${diskSvg}</div>
+        <div class="disk-info">
+          <div class="disk-name">Diskler algılanıyor…</div>
+          <div class="disk-meta">Gerçek disk bilgileri sistemden okunuyor.</div>
+        </div></div>`;
+      return;
+    }
+
+    if (!lastDisks.length) {
+      list.innerHTML = `<div class="disk-item" style="cursor:default">
+        <div class="disk-icon">${diskSvg}</div>
+        <div class="disk-info">
+          <div class="disk-name">Kurulabilir disk bulunamadı</div>
+          <div class="disk-meta">Sistem gerçek diskleri döndürmedi.</div>
+        </div></div>`;
+      return;
+    }
+
+    list.innerHTML = lastDisks.map(d => `
+      <div class="disk-item ${selectedDisk===d.path?'selected':''}" data-disk="${esc(d.path)}">
+        <div class="disk-icon">${diskSvg}</div>
+        <div class="disk-info">
+          <div class="disk-name">${esc(d.path)}${d.label ? ' — ' + esc(d.label) : ''}</div>
+          <div class="disk-meta">${esc(d.sizeLabel || diskSize(d.size))}</div>
+        </div>
+        <div class="disk-radio"></div>
+      </div>`).join('');
+
+    bindStepEvents();
+    const btnNext = document.getElementById('btnNext');
+    if (btnNext && steps[current] && steps[current].key === 'disk') {
+      btnNext.disabled = !selectedDisk;
+    }
+  }
+
+  function setWifiStatus(connected, label){
+    const el = document.getElementById('wifiStatus');
+    const text = document.getElementById('wifiText');
+    if (!el || !text) return;
+    el.classList.remove('online','offline','checking');
+    if (connected === null) {
+      el.classList.add('checking');
+      text.textContent = 'Ağ kontrol ediliyor…';
+    } else if (connected) {
+      el.classList.add('online');
+      text.textContent = label ? ('Wi-Fi · ' + label) : 'Bağlı';
+    } else {
+      el.classList.add('offline');
+      text.textContent = 'Bağlı değil';
+    }
+  }
+
+  // agroos-webui.cc, browser olusturulmadan once agdurumunu kontrol
+  // edebilir; browser hazir olduktan sonra bu fonksiyonu cagirir.
+  window.AgroOSNetwork = {
+    setStatus: function(connected, ssid){ setWifiStatus(connected, ssid); },
+    checking: function(){ setWifiStatus(null); }
+  };
+
+  // C++ <-> JS sozlesmesi (agroos-webui.cc ile birebir eslesir):
+  //   window.AgroOS.onReady(disks)              -> hazirlaniyor ekranindan sihirbaza gecis
+  //   window.AgroOS.setDiskList(disks)           -> disk listesini gunceller (sihirbaz icindeyken)
+  //   window.AgroOS.updateProgress(pct,label,log)-> kurulum ilerlemesi
+  //   window.AgroOS.onError(message)             -> hata bildirimi
+  window.AgroOS = {
+    onReady: function(disks){
+      lastDisks = Array.isArray(disks) ? disks : [];
+      goStep('welcome');
+    },
+    setDiskList: function(disks){
+      lastDisks = Array.isArray(disks) ? disks : [];
+      renderDiskList();
+    },
+    updateProgress: function(pct, label, logLine){
+      const fill = document.getElementById('progressFill');
+      const pctEl = document.getElementById('progressPct');
+      const labelEl = document.getElementById('progressText');
+      const p = Math.max(0, Math.min(100, Number(pct)));
+      if (fill) fill.style.width = p + '%';
+      if (pctEl) pctEl.textContent = Math.floor(p) + '%';
+      if (labelEl) labelEl.textContent = label || '';
+      if (logLine) {
+        installLog.push(logLine);
+        const logEl = document.getElementById('installLog');
+        if (logEl) {
+          logEl.innerHTML = installLog.map(l => `<div class="line">${esc(l)}</div>`).join('');
+          logEl.scrollTop = logEl.scrollHeight;
+        }
+      }
+      if (p >= 100) setTimeout(() => goStep('done'), 500);
+    },
+    onError: function(message){
+      const labelEl = document.getElementById('progressText');
+      if (labelEl) labelEl.textContent = message || 'Kurulum başarısız.';
+      const content = document.getElementById('stepContent');
+      if (content && !content.querySelector('.disk-warning.error-box')) {
+        content.insertAdjacentHTML('beforeend',
+          `<div class="disk-warning error-box">${warningSvg}<span>${esc(message || 'Bilinmeyen hata')}</span></div>`);
+      }
+    }
+  };
+
+  function bindStepEvents(){
+    document.querySelectorAll('.disk-item[data-disk]').forEach(item=>{
+      item.addEventListener('click', ()=>{
+        document.querySelectorAll('.disk-item').forEach(i=>i.classList.remove('selected'));
+        item.classList.add('selected');
+
+        const diskName = item.dataset.disk;
+        selectedDisk = diskName;
+        document.getElementById('btnNext').disabled = false;
+        realRequest({type:'disk_selected', disk:diskName},
+          function(){},
+          function(code,msg){ console.error('disk_selected:', code, msg); });
+      });
+    });
+  }
+
+  function goStep(key){
+    current = steps.findIndex(s => s.key === key);
+    if (current < 0) current = 0;
+    document.getElementById('titlebarText').textContent = 'AgroOS Kurulumu';
+    document.getElementById('stepPills').style.display = 'flex';
+    document.getElementById('cardFooter').style.display = 'flex';
+    renderStep();
+    if (key === 'disk') renderDiskList();
+  }
+
+  document.getElementById('btnNext').addEventListener('click', ()=>{
+    if (current < steps.length - 1) {
+      const leavingKey = steps[current].key;
+      if (leavingKey === 'disk' && !selectedDisk) return;  // disk secilmeden ilerleme
+
+      current++;
+      renderStep();
+      if (steps[current].key === 'disk') renderDiskList();
+
+      if (steps[current].key === 'install') {
+        realRequest({type:'start_install', disk:selectedDisk},
+          function(){},
+          function(code,msg){
+            window.AgroOS.onError(msg || 'Kurulum başlatılamadı.');
+          });
+      }
+    } else {
+      realRequest({type:'reboot'}, function(){}, function(){});
+    }
+  });
+
+  document.getElementById('btnBack').addEventListener('click', ()=>{
+    if (current > 0) { current--; renderStep(); if (steps[current].key === 'disk') renderDiskList(); }
+  });
+
+  // Baslangic: "hazirlaniyor" ekrani zaten HTML'de gosteriliyor.
+  // C++'a UI'in hazir oldugunu bildir; C++ disk taramasini yapip
+  // window.AgroOS.onReady(disks) ile sihirbaza gecisi tetikleyecek.
+  realRequest({type:'ui_ready'}, function(){}, function(code,msg){
+    console.error('ui_ready basarisiz:', code, msg);
+  });
+
+  // cefQuery henuz yoksa (tarayici onizlemesi / bridge baglanmadan
+  // once gelistirme), kisa bir sure sonra sahte veriyle devam et.
+  if (typeof window.cefQuery !== 'function') {
+    setTimeout(()=>{
+      setWifiStatus(true, 'AgroNet');
+      window.AgroOS.onReady([
+        {path:'/dev/sda', label:'QEMU HARDDISK', sizeLabel:'40 GB · Virtio'},
+        {path:'/dev/sdb', label:'QEMU HARDDISK', sizeLabel:'20 GB · Virtio'}
+      ]);
+    }, 1200);
+  }
+</script>
+</body>
+</html>
