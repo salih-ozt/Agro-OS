@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AgroOS Kurulum Sihirbazı</title>
+<style>
+  :root{
+    --accent: #34c759;
+    --accent-2: #30d158;
+    --danger: #ff453a;
+    --text-primary: rgba(255,255,255,0.95);
+    --text-secondary: rgba(255,255,255,0.6);
+    --text-tertiary: rgba(255,255,255,0.38);
+    --glass-bg: rgba(30,30,32,0.55);
+    --glass-border: rgba(255,255,255,0.14);
+  }
+  *{ margin:0; padding:0; box-sizing:border-box; -webkit-font-smoothing:antialiased; }
+  html,body{ width:100%; height:100%; font-family:-apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, sans-serif; overflow:hidden; user-select:none; }
+
+  .bg{ position:fixed; inset:0; background-image:url("assets/oobe_background.jpg"); background-size:cover; background-position:center; filter: blur(38px) brightness(0.55) saturate(1.15); transform: scale(1.15); z-index:0; }
+  .bg-overlay{ position:fixed; inset:0; background: radial-gradient(ellipse at 50% 0%, rgba(0,0,0,0.05), rgba(0,0,0,0.55) 75%); z-index:1; }
+
+  .menubar{ position:fixed; top:0; left:0; right:0; height:28px; z-index:20; display:flex; align-items:center; justify-content:space-between; padding:0 16px; background:rgba(20,20,22,0.35); backdrop-filter: blur(20px) saturate(1.8); -webkit-backdrop-filter: blur(20px) saturate(1.8); border-bottom:1px solid rgba(255,255,255,0.08); font-size:12.5px; color:var(--text-secondary); }
+  .menubar-left{ display:flex; align-items:center; gap:16px; font-weight:600; color:var(--text-primary); }
+  .agroos-logo{ display:flex; align-items:center; gap:6px; }
+  .agroos-logo .dot{ width:8px; height:8px; border-radius:50%; background:var(--accent); box-shadow:0 0 8px var(--accent);}
+  .menubar-right{ display:flex; align-items:center; gap:14px; font-variant-numeric:tabular-nums; }
+
+  .stage{ position:relative; z-index:10; width:100%; height:100%; display:flex; align-items:center; justify-content:center; padding-top:28px; }
+
+  .card{ width:600px; max-width:92vw; min-height:480px; border-radius:20px; background:var(--glass-bg); backdrop-filter: blur(40px) saturate(1.6); -webkit-backdrop-filter: blur(40px) saturate(1.6); border:1px solid var(--glass-border); box-shadow: 0 20px 60px rgba(0,0,0,0.5), 0 2px 8px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.12); display:flex; flex-direction:column; overflow:hidden; animation: cardIn 0.6s cubic-bezier(0.16,1,0.3,1); }
+  @keyframes cardIn{ from{ opacity:0; transform:translateY(24px) scale(0.97);} to{ opacity:1; transform:translateY(0) scale(1);} }
+
+  .card-titlebar{ height:44px; display:flex; align-items:center; padding:0 16px; gap:8px; border-bottom:1px solid rgba(255,255,255,0.06); background:rgba(255,255,255,0.02); }
+  .traffic{ width:12px; height:12px; border-radius:50%; }
+  .traffic.red{ background:#ff5f57; } .traffic.yellow{ background:#febc2e; } .traffic.green{ background:#28c840; }
+  .card-titlebar .title{ flex:1; text-align:center; font-size:12.5px; font-weight:600; color:var(--text-secondary); margin-right:52px; }
+
+  .steps{ display:flex; align-items:center; justify-content:center; gap:6px; padding:22px 24px 6px; }
+  .step-pill{ height:4px; width:30px; border-radius:2px; background:rgba(255,255,255,0.14); transition: background 0.4s ease, box-shadow 0.4s ease; }
+  .step-pill.done{ background:var(--accent); box-shadow:0 0 6px rgba(52,199,89,0.6); }
+  .step-pill.active{ background:linear-gradient(90deg, var(--accent), var(--accent-2)); box-shadow:0 0 10px rgba(52,199,89,0.7); }
+
+  .content{ flex:1; display:flex; flex-direction:column; padding:28px 32px 20px; }
+  .step-title{ font-size:22px; font-weight:700; color:var(--text-primary); letter-spacing:-0.3px; margin-bottom:6px; }
+  .step-desc{ font-size:14px; line-height:1.5; color:var(--text-secondary); margin-bottom:22px; }
+
+  .opt-list{ display:flex; flex-direction:column; gap:10px; }
+  .opt-item{ display:flex; align-items:center; gap:12px; padding:14px 16px; border-radius:12px; background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.08); cursor:pointer; transition: all 0.2s ease; }
+  .opt-item:hover{ background:rgba(255,255,255,0.07); border-color:rgba(255,255,255,0.16); }
+  .opt-item.selected{ background:rgba(52,199,89,0.12); border-color:rgba(52,199,89,0.5); box-shadow:0 0 0 3px rgba(52,199,89,0.12); }
+  .opt-info{ flex:1; min-width:0; }
+  .opt-name{ font-size:13.5px; font-weight:600; color:var(--text-primary); }
+  .opt-meta{ font-size:11.5px; color:var(--text-tertiary); margin-top:2px; }
+  .opt-radio{ width:18px; height:18px; border-radius:50%; border:1.5px solid rgba(255,255,255,0.3); flex-shrink:0; position:relative; transition: all 0.2s ease; }
+  .opt-item.selected .opt-radio{ border-color:var(--accent); background:var(--accent); }
+  .opt-item.selected .opt-radio::after{ content:''; position:absolute; inset:4px; border-radius:50%; background:#0b0b0c; }
+
+  .text-input{ width:100%; padding:13px 14px; border-radius:10px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.12); color:var(--text-primary); font-size:14px; font-family:inherit; outline:none; }
+  .text-input:focus{ border-color:var(--accent); box-shadow:0 0 0 3px rgba(52,199,89,0.15); }
+  .text-input::placeholder{ color:var(--text-tertiary); }
+
+  .wifi-item{ display:flex; align-items:center; gap:12px; padding:12px 14px; border-radius:10px; background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.08); cursor:pointer; margin-bottom:8px; }
+  .wifi-item:hover{ background:rgba(255,255,255,0.07); }
+  .wifi-item.selected{ background:rgba(52,199,89,0.12); border-color:rgba(52,199,89,0.5); }
+  .lock-icon{ opacity:0.5; font-size:12px; }
+  .signal-bars{ display:flex; align-items:flex-end; gap:2px; height:14px; }
+  .signal-bars span{ width:3px; background:var(--text-tertiary); border-radius:1px; }
+
+  .password-wrap{ margin-top:16px; display:none; }
+  .password-wrap.show{ display:block; }
+
+  .progress-wrap{ margin-top:20px; }
+  .progress-track{ height:6px; border-radius:3px; background:rgba(255,255,255,0.08); overflow:hidden; margin-bottom:10px; }
+  .progress-fill{ height:100%; border-radius:3px; background:linear-gradient(90deg, var(--accent), var(--accent-2)); width:0%; box-shadow:0 0 12px rgba(52,199,89,0.6); transition:width 0.5s ease; }
+
+  .card-footer{ display:flex; align-items:center; justify-content:space-between; padding:16px 32px 24px; border-top:1px solid rgba(255,255,255,0.06); margin-top:auto; }
+  .btn{ appearance:none; border:none; outline:none; font-family:inherit; font-size:14px; font-weight:600; padding:10px 22px; border-radius:10px; cursor:pointer; transition: all 0.15s ease; letter-spacing:-0.1px; }
+  .btn-ghost{ background:rgba(255,255,255,0.06); color:var(--text-secondary); border:1px solid rgba(255,255,255,0.1); }
+  .btn-ghost:hover{ background:rgba(255,255,255,0.1); color:var(--text-primary); }
+  .btn-ghost:disabled{ opacity:0.3; cursor:default; }
+  .btn-primary{ background:linear-gradient(145deg, var(--accent-2), var(--accent)); color:#06210e; box-shadow:0 4px 16px rgba(52,199,89,0.35), inset 0 1px 0 rgba(255,255,255,0.3); }
+  .btn-primary:hover{ filter:brightness(1.08); transform:translateY(-1px); }
+  .btn-primary:disabled{ opacity:0.35; cursor:default; transform:none; filter:none; }
+  .step-counter{ font-size:12px; color:var(--text-tertiary); font-variant-numeric: tabular-nums; }
+
+  /* ---------- Tam ekran hazirlaniyor overlay ---------- */
+  .prep-overlay{
+    position:fixed; inset:0; z-index:100;
+    display:none; align-items:center; justify-content:center; flex-direction:column;
+    background:rgba(8,10,9,0.92);
+    backdrop-filter: blur(30px);
+  }
+  .prep-overlay.show{ display:flex; }
+  .prep-ring-lg{ width:64px; height:64px; margin-bottom:28px; }
+  .prep-ring-lg svg{ width:64px; height:64px; animation: prep-spin 1.4s linear infinite; }
+  .prep-ring-lg circle{ fill:none; stroke-width:4; stroke-linecap:round; stroke:var(--accent); stroke-dasharray:130; stroke-dashoffset:100; }
+  @keyframes prep-spin{ to{ transform:rotate(360deg); } }
+  .prep-title-lg{ font-size:20px; font-weight:700; color:var(--text-primary); margin-bottom:8px; }
+  .prep-sub-lg{ font-size:13px; color:var(--text-tertiary); }
+</style>
+</head>
+<body>
+  <div class="bg"></div>
+  <div class="bg-overlay"></div>
+
+  <div class="menubar">
+    <div class="menubar-left"><div class="agroos-logo"><span class="dot"></span> AgroOS</div></div>
+    <div class="menubar-right"><span id="clock">--:--</span></div>
+  </div>
+
+  <div class="stage">
+    <div class="card" id="card">
+      <div class="card-titlebar">
+        <span class="traffic red"></span><span class="traffic yellow"></span><span class="traffic green"></span>
+        <span class="title">AgroOS Kurulum Sihirbazı</span>
+      </div>
+      <div class="steps" id="stepPills"></div>
+      <div class="content" id="stepContent"></div>
+      <div class="card-footer" id="cardFooter">
+        <button class="btn btn-ghost" id="btnBack">Geri</button>
+        <span class="step-counter" id="stepCounter">1 / 7</span>
+        <button class="btn btn-primary" id="btnNext">İleri</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="prep-overlay" id="prepOverlay">
+    <div class="prep-ring-lg"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/></svg></div>
+    <div class="prep-title-lg">AgroOS hazırlanıyor</div>
+    <div class="prep-sub-lg">Bu işlem biraz zaman alabilir</div>
+  </div>
+
+<script>
+  function tick(){
+    const d = new Date();
+    document.getElementById('clock').textContent = d.toLocaleTimeString('tr-TR', {hour:'2-digit', minute:'2-digit'});
+  }
+  tick(); setInterval(tick, 1000);
+
+  let current = 0;
+  let pcName = '';
+  let usagePurpose = null;
+  let wifiConnected = false;
+  let netConnecting = false;
+  let netIface = 'eth0';
+  let netIp = '';
+
+  let hostnameApplied = false;
+  let hostnameApplying = false;
+
+  let updateState = 'idle'; // idle | checking | downloading | verifying | done | error
+  let updatePct = 0;
+  let updateMessage = '';
+
+  // Tum C++ koprusu cagrilari bu fonksiyondan gecer (index.html ile ayni desen)
+  function realRequest(payload, ok, fail) {
+    if (typeof window.cefQuery !== 'function') {
+      console.warn('[oobe] cefQuery yok (dev mode):', payload);
+      fail && fail(-1, 'CEF message router hazır değil (dev mode).');
+      return;
+    }
+    window.cefQuery({
+      request: JSON.stringify(payload),
+      onSuccess: ok || function(){},
+      onFailure: fail || function(){}
+    });
+  }
+
+  const steps = [
+    {
+      key:'region', title:'Ülke veya Bölge', desc:'Bulunduğunuz ülke veya bölgeyi seçin.',
+      render: () => `<div class="opt-list">
+        <div class="opt-item selected" data-region="TR">
+          <div class="opt-info"><div class="opt-name">Türkiye</div></div>
+          <div class="opt-radio"></div>
+        </div>
+      </div>`
+    },
+    {
+      key:'keyboard', title:'Klavye Düzeni', desc:'Ana klavye düzeninizi seçin.',
+      render: () => `<div class="opt-list">
+        <div class="opt-item selected" data-kb="tr-q">
+          <div class="opt-info"><div class="opt-name">Türkçe Q</div></div>
+          <div class="opt-radio"></div>
+        </div>
+      </div>`
+    },
+    {
+      key:'keyboard2', title:'İkinci Klavye Düzeni', desc:'İsteğe bağlı olarak ikinci bir klavye düzeni ekleyebilirsiniz.',
+      render: () => `<p style="font-size:13px;color:var(--text-secondary);line-height:1.6;">İkinci bir klavye düzeni eklemek istemiyorsanız bu adımı atlayabilirsiniz.</p>`
+    },
+    {
+      key:'network', title:'Ağ Bağlantısı', desc:'Devam etmek için bir ağa bağlanın.',
+      render: () => `
+        <div id="netStatusBox" class="opt-list">
+          <div class="wifi-item" id="netRow" data-net="eth0">
+            <div class="opt-info">
+              <div class="opt-name" id="netName">Kablolu Bağlantı (eth0)</div>
+              <div class="opt-meta" id="netMeta">Henüz bağlanılmadı</div>
+            </div>
+            <span id="netSpinner" style="display:none;width:14px;height:14px;">
+              <svg viewBox="0 0 24 24" style="width:14px;height:14px;animation:prep-spin 1s linear infinite;">
+                <circle cx="12" cy="12" r="10" fill="none" stroke="var(--accent)" stroke-width="3" stroke-linecap="round" stroke-dasharray="50" stroke-dashoffset="30"/>
+              </svg>
+            </span>
+          </div>
+        </div>
+        <button class="btn btn-primary" id="btnConnectNet" style="margin-top:16px;width:100%;">Bağlan</button>
+        <div id="netError" style="display:none;margin-top:12px;font-size:12.5px;color:var(--danger);"></div>`
+    },
+    {
+      key:'update', title:'Güncellemeler Denetleniyor', desc:'VPS güncelleme sunucusuna bağlanılıyor…',
+      render: () => `
+        <div class="progress-wrap">
+          <div class="progress-track"><div class="progress-fill" id="updateFill"></div></div>
+        </div>
+        <div id="updateStatus" style="font-size:12.5px;color:var(--text-secondary);margin-top:4px;">Sunucuya bağlanılıyor…</div>
+        <div id="updateLog" style="margin-top:14px;font-size:11.5px;color:var(--text-tertiary);line-height:1.6;max-height:120px;overflow-y:auto;"></div>`
+    },
+    {
+      key:'pcname', title:'Bilgisayarınızı Adlandırın', desc:'Bu isim ağda cihazınızı tanımlamak için kullanılacak.',
+      render: () => `<input type="text" class="text-input" id="pcNameInput" placeholder="PC adı" value="${pcName}">`
+    },
+    {
+      key:'usage', title:'Bu cihazı nasıl kullanacaksınız?', desc:'Deneyiminizi kişiselleştirmemize yardımcı olun.',
+      render: () => `<div class="opt-list">
+        <div class="opt-item ${usagePurpose==='personal'?'selected':''}" data-usage="personal">
+          <div class="opt-info"><div class="opt-name">Kişisel kullanım</div></div><div class="opt-radio"></div>
+        </div>
+        <div class="opt-item ${usagePurpose==='work'?'selected':''}" data-usage="work">
+          <div class="opt-info"><div class="opt-name">İş veya okul</div></div><div class="opt-radio"></div>
+        </div>
+      </div>`
+    }
+  ];
+
+  function renderPills(){
+    document.getElementById('stepPills').innerHTML = steps.map((s,i)=>{
+      const cls = i < current ? 'done' : (i === current ? 'active' : '');
+      return `<div class="step-pill ${cls}"></div>`;
+    }).join('');
+  }
+
+  function canProceed(){
+    const s = steps[current];
+    if (s.key === 'network') return wifiConnected;
+    if (s.key === 'update') return updateState === 'done' || updateState === 'error';
+    if (s.key === 'pcname') return pcName.trim().length > 0;
+    if (s.key === 'usage') return usagePurpose !== null;
+    return true;
+  }
+
+  function renderStep(){
+    const s = steps[current];
+    document.getElementById('stepContent').innerHTML = `
+      <div class="step-title">${s.title}</div>
+      <div class="step-desc">${s.desc}</div>
+      ${s.render()}
+    `;
+    document.getElementById('stepCounter').textContent = `${current+1} / ${steps.length}`;
+    document.getElementById('btnBack').disabled = (current === 0);
+    document.getElementById('btnNext').textContent = (current === steps.length-1) ? 'Bitir' : 'İleri';
+    document.getElementById('btnNext').disabled = !canProceed();
+    renderPills();
+    bindStepEvents();
+
+    if (s.key === 'update') {
+      renderUpdateUi();
+      if (updateState === 'idle') {
+        startUpdateCheck();
+      }
+    }
+
+    if (s.key === 'pcname' && !hostnameApplied && !hostnameApplying) {
+      // adima girildiginde henuz uygulanmadiysa buton metnini normal birak,
+      // gercek uygulama 'Ileri'ye basildiginda tetiklenecek (asagida btnNext handler'inda)
+    }
+  }
+
+  function renderUpdateUi(){
+    const fill = document.getElementById('updateFill');
+    const statusEl = document.getElementById('updateStatus');
+    const logEl = document.getElementById('updateLog');
+    if (fill) fill.style.width = updatePct + '%';
+    if (statusEl) statusEl.textContent = updateMessage || 'Sunucuya bağlanılıyor…';
+    document.getElementById('btnNext').disabled = !canProceed();
+    document.getElementById('btnNext').textContent =
+      updateState === 'error' ? 'Atla ve Devam Et' :
+      (current === steps.length-1 ? 'Bitir' : 'İleri');
+  }
+
+  function appendUpdateLog(line){
+    const logEl = document.getElementById('updateLog');
+    if (!logEl) return;
+    const p = document.createElement('div');
+    p.textContent = line;
+    logEl.appendChild(p);
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+
+  let updateWatchdogTimer = null;
+
+  function clearUpdateWatchdog(){
+    if (updateWatchdogTimer) {
+      clearTimeout(updateWatchdogTimer);
+      updateWatchdogTimer = null;
+    }
+  }
+
+  function startUpdateCheck(){
+    updateState = 'checking';
+    updatePct = 5;
+    updateMessage = 'Güncelleme sunucusuna bağlanılıyor…';
+    renderUpdateUi();
+    appendUpdateLog('VPS güncelleme sunucusuna bağlanılıyor…');
+
+    clearUpdateWatchdog();
+    // C++ tarafi hicbir onUpdateEvent push'u yapmazsa (agdaki sorun, VPS
+    // cevap vermiyor, wget asilip kaliyor vb.) kullanici sonsuza kadar
+    // "checking" ekraninda kalmasin diye 20 saniyelik bir guvenlik siniri:
+    updateWatchdogTimer = setTimeout(function(){
+      if (updateState === 'checking') {
+        updateState = 'error';
+        updateMessage = 'Sunucudan yanıt alınamadı (zaman aşımı)';
+        appendUpdateLog('HATA: 20 saniye icinde yanit gelmedi, atlaniyor');
+        renderUpdateUi();
+      }
+    }, 20000);
+
+    realRequest({type:'oobe_check_update'}, function(resp){
+      // Bu ilk cevap sadece "istek alindi" onayi; gercek sonuc
+      // window.AgroOSUpdate.onUpdateEvent(...) push'lariyla gelecek (asagida).
+    }, function(code, msg){
+      clearUpdateWatchdog();
+      updateState = 'error';
+      updateMessage = 'Bağlantı kurulamadı: ' + msg;
+      appendUpdateLog('HATA: ' + msg);
+      renderUpdateUi();
+    });
+  }
+
+  // C++ tarafi update surecinin her asamasinda bunu cagiracak:
+  // window.AgroOSUpdate.onUpdateEvent({state, pct, message, log})
+  window.AgroOSUpdate = {
+    onUpdateEvent: function(ev){
+      if (!ev) return;
+      if (ev.state === 'done' || ev.state === 'error') {
+        clearUpdateWatchdog();
+      }
+      if (ev.state) updateState = ev.state;
+      if (typeof ev.pct === 'number') updatePct = ev.pct;
+      if (ev.message) updateMessage = ev.message;
+      if (ev.log) appendUpdateLog(ev.log);
+      if (steps[current] && steps[current].key === 'update') {
+        renderUpdateUi();
+      }
+    }
+  };
+
+  function bindStepEvents(){
+    document.querySelectorAll('.opt-item[data-usage]').forEach(el=>{
+      el.addEventListener('click', ()=>{
+        usagePurpose = el.dataset.usage;
+        renderStep();
+      });
+    });
+
+    const btnConnect = document.getElementById('btnConnectNet');
+    if (btnConnect) {
+      btnConnect.addEventListener('click', connectNetwork);
+      // Adima ilk girildiginde otomatik dene (kullanici isterse tekrar basabilir)
+      if (!wifiConnected && !netConnecting) {
+        connectNetwork();
+      }
+    }
+
+    const pcInput = document.getElementById('pcNameInput');
+    if (pcInput) {
+      pcInput.addEventListener('input', (e)=>{
+        pcName = e.target.value;
+        hostnameApplied = false; // isim degistiyse tekrar uygulanmasi gerekir
+        document.getElementById('btnNext').disabled = !canProceed();
+      });
+    }
+  }
+
+  function connectNetwork(){
+    if (netConnecting) return;
+    netConnecting = true;
+    wifiConnected = false;
+
+    const nameEl = document.getElementById('netName');
+    const metaEl = document.getElementById('netMeta');
+    const spinnerEl = document.getElementById('netSpinner');
+    const errEl = document.getElementById('netError');
+    const btn = document.getElementById('btnConnectNet');
+
+    if (metaEl) metaEl.textContent = 'Bağlanılıyor…';
+    if (spinnerEl) spinnerEl.style.display = 'inline-block';
+    if (errEl) errEl.style.display = 'none';
+    if (btn) { btn.disabled = true; btn.textContent = 'Bağlanılıyor…'; }
+    document.getElementById('btnNext').disabled = true;
+
+    realRequest({type:'oobe_wifi_connect', iface: netIface}, function(){
+      // basarili "istek alindi" onayi; gercek sonuc AgroOSNetwork.onWifiResult ile gelecek
+    }, function(code, msg){
+      netConnecting = false;
+      if (spinnerEl) spinnerEl.style.display = 'none';
+      if (btn) { btn.disabled = false; btn.textContent = 'Tekrar Dene'; }
+      if (metaEl) metaEl.textContent = 'Bağlanamadı';
+      if (errEl) { errEl.style.display = 'block'; errEl.textContent = msg || 'Bilinmeyen hata'; }
+    });
+  }
+
+  // C++ tarafi (AgroMessageHandler::OnQuery -> oobe_wifi_connect) is bitince
+  // bunu ExecuteJavaScript ile cagiriyor: AgroOSNetwork.onWifiResult(ok, iface, ip)
+  window.AgroOSNetwork = window.AgroOSNetwork || {};
+  window.AgroOSNetwork.onWifiResult = function(ok, iface, ip){
+    netConnecting = false;
+    const nameEl = document.getElementById('netName');
+    const metaEl = document.getElementById('netMeta');
+    const spinnerEl = document.getElementById('netSpinner');
+    const errEl = document.getElementById('netError');
+    const btn = document.getElementById('btnConnectNet');
+    if (spinnerEl) spinnerEl.style.display = 'none';
+
+    if (ok) {
+      wifiConnected = true;
+      netIface = iface || netIface;
+      netIp = ip || '';
+      if (nameEl) nameEl.textContent = 'Kablolu Bağlantı (' + netIface + ')';
+      if (metaEl) metaEl.textContent = 'Bağlandı · ' + netIp;
+      if (btn) { btn.style.display = 'none'; }
+      if (errEl) errEl.style.display = 'none';
+    } else {
+      wifiConnected = false;
+      if (metaEl) metaEl.textContent = 'Bağlanamadı';
+      if (btn) { btn.disabled = false; btn.textContent = 'Tekrar Dene'; btn.style.display = 'block'; }
+      if (errEl) { errEl.style.display = 'block'; errEl.textContent = 'IP alınamadı, kabloyu/ağı kontrol edip tekrar deneyin.'; }
+    }
+    document.getElementById('btnNext').disabled = !canProceed();
+  };
+
+  document.getElementById('btnNext').addEventListener('click', ()=>{
+    const s = steps[current];
+
+    if (s.key === 'pcname' && !hostnameApplied) {
+      applyHostnameThenAdvance();
+      return;
+    }
+
+    if (current < steps.length - 1) {
+      current++;
+      renderStep();
+    } else {
+      finishOobe();
+    }
+  });
+
+  function applyHostnameThenAdvance(){
+    if (hostnameApplying) return;
+    hostnameApplying = true;
+    const btn = document.getElementById('btnNext');
+    const originalText = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'Uygulanıyor…';
+
+    realRequest({type:'oobe_set_hostname', name: pcName.trim()}, function(){
+      hostnameApplying = false;
+      hostnameApplied = true;
+      btn.textContent = originalText;
+      if (current < steps.length - 1) {
+        current++;
+        renderStep();
+      } else {
+        finishOobe();
+      }
+    }, function(code, msg){
+      hostnameApplying = false;
+      btn.disabled = false;
+      btn.textContent = originalText;
+      alert('Bilgisayar adı uygulanamadı: ' + (msg || 'bilinmeyen hata'));
+    });
+  }
+  document.getElementById('btnBack').addEventListener('click', ()=>{
+    if (current > 0) { current--; renderStep(); }
+  });
+
+  function finishOobe(){
+    document.getElementById('card').style.display = 'none';
+    document.getElementById('prepOverlay').classList.add('show');
+    realRequest({type:'oobe_done', pcName: pcName, usage: usagePurpose}, function(){
+      // C++ tarafi bu cevaptan kisa bir sure sonra CefQuitMessageLoop cagirip
+      // sureci kapatacak; burada ekstra bir sey yapmaya gerek yok.
+    }, function(code, msg){
+      console.error('oobe_done basarisiz:', code, msg);
+      // basarisiz olsa bile hazirlaniyor ekraninda kalinsin, C++ loglarina bakilmali
+    });
+  }
+
+  renderStep();
+</script>
+</body>
+</html>
